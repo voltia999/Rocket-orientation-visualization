@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rocket Attitude Visualizer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #0c0b1e;
+            font-family: monospace;
+        }
+
+        /* ── Header ───────────────────────────────────────────── */
+        #app-header {
+            display: flex;
+            width: 100%;
+            height: 72px;
+            flex-shrink: 0;
+            background: #13112b;
+            border-bottom: 1px solid #2d2550;
+        }
+
+        #header-left {
+            flex: 2;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #header-left img {
+            position: absolute;
+            left: 20px;
+            height: 48px;
+            pointer-events: none;
+        }
+
+        #header-left h1 {
+            color: #FF0033;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-shadow: 0 0 8px #FF003380, 0 0 20px #FF003340;
+        }
+
+        #header-right {
+            flex: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #header-right h2 {
+            color: #FF0033;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            text-shadow: 0 0 8px #FF003380, 0 0 20px #FF003340;
+        }
+
+        /* ── Main content ─────────────────────────────────────── */
+        #main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* ── Charts Panel ─────────────────────────────────────── */
+        #charts-container {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            background: #0c0b1e;
+        }
+
+        .chart-panel {
+            flex: 1;
+            background: #0c0b1e;
+            border: 1px solid #2a2a35;
+            border-radius: 6px;
+            padding: 6px 12px 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 4px;
+            letter-spacing: 2px;
+        }
+
+        .chart-canvas-wrapper {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        /* ── 3D Panel ─────────────────────────────────────────── */
+        #three-container {
+            flex: 3;
+            position: relative;
+        }
+
+        #three-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<header id="app-header">
+    <div id="header-left">
+        <img src="Solaris_Insignia_ConFondo.svg" alt="Solaris Logo">
+        <h1>Orientation Data</h1>
+    </div>
+    <div id="header-right">
+        <h2>Rocket Attitude</h2>
+    </div>
+</header>
+
+<main id="main-content">
+    <div id="charts-container">
+        <div class="chart-panel">
+            <div class="chart-title" style="color:#44ff44; text-shadow: 0 0 8px #44ff4488;">Roll &nbsp; φ (°)</div>
+            <div class="chart-canvas-wrapper"><canvas id="chart-roll"></canvas></div>
+        </div>
+        <div class="chart-panel">
+            <div class="chart-title" style="color:#4488ff; text-shadow: 0 0 8px #4488ff88;">Pitch &nbsp; θ (°)</div>
+            <div class="chart-canvas-wrapper"><canvas id="chart-pitch"></canvas></div>
+        </div>
+        <div class="chart-panel">
+            <div class="chart-title" style="color: #ff4444; text-shadow: 0 0 8px #ff444488;">Yaw &nbsp; ψ (°)</div>
+            <div class="chart-canvas-wrapper"><canvas id="chart-yaw"></canvas></div>
+        </div>
+    </div>
+
+    <div id="three-container">
+        <canvas id="three-canvas"></canvas>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ─────────────────────────────────────────────────────────────
+// COLORS 
+// ─────────────────────────────────────────────────────────────
+const C_BG        = 0x0c0b1e;   // 3D background
+const C_ROCKET    = 0xFF2200;   // Wireframe rocket
+const C_AXES_3D   = { x: 0xff4444, y: 0x44ff44, z: 0x4488ff };
+const C_LINE1     = '#44ff44';  // Roll line color (Matches title: Green)
+const C_LINE2     = '#4488ff';  // Pitch line color (Matches title: Blue)
+const C_LINE3     = '#ff4444';  // Yaw line color (Matches title: Red)
+const C_GRID_PLT  = '#3a2535';  // Chart grid color
+
+// ─────────────────────────────────────────────────────────────
+// CONFIGURATION
+// ─────────────────────────────────────────────────────────────
+const WINDOW_T = 50;   // Seconds before resetting charts
+
+// ─────────────────────────────────────────────────────────────
+// THREE.JS — Scene Setup
+// ─────────────────────────────────────────────────────────────
+const canvas    = document.getElementById('three-canvas');
+const container = document.getElementById('three-container');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setClearColor(C_BG);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+
+// Add fog to fade the grid into the distance using the background color
+scene.fog = new THREE.Fog(C_BG, 300, 1000);
+
+// Trimetric projection: orthographic + asymmetric angle
+const VIEW_SIZE = 220;
+const camera = new THREE.OrthographicCamera(
+    -VIEW_SIZE, VIEW_SIZE,
+    VIEW_SIZE, -VIEW_SIZE,
+    -2000, 2000
+);
+// Standard trimetric angles: elevation ~20°, azimuth ~30°
+camera.position.set(320, 240, 420);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+// ─────────────────────────────────────────────────────────────
+// SLIDING NEON GRID
+// ─────────────────────────────────────────────────────────────
+// Infinite grid via shader — no jumps, no visible borders
+const gridMat = new THREE.ShaderMaterial({
+    uniforms: {
+        uOffset  : { value: 0.0 },
+        // Brightened version of the chart grid color so it glows
+        uColor   : { value: new THREE.Color(0x9a5b8e) }, 
+        // Exact chart grid color for the background fade/halo
+        uFade    : { value: new THREE.Color(0x3a2535) }, 
+        uCellSize: { value: 25.0 },
+    },
+    vertexShader: `
+        varying vec2 vWorld;
+        void main() {
+            vec4 w = modelMatrix * vec4(position, 1.0);
+            vWorld = w.xz;
+            gl_Position = projectionMatrix * viewMatrix * w;
+        }
+    `,
+    fragmentShader: `
+        uniform float uOffset;
+        uniform vec3  uColor;
+        uniform vec3  uFade;
+        uniform float uCellSize;
+        varying vec2  vWorld;
+
+        void main() {
+            vec2  c    = vec2(vWorld.x, vWorld.y + uOffset) / uCellSize;
+            vec2  g    = abs(fract(c - 0.5) - 0.5);
+            float d    = min(g.x, g.y);
+
+            // Sharp core + two glow halos (simulates blur)
+            float core  = 1.0 - smoothstep(0.008, 0.01, d);
+            float halo1 = (1.0 - smoothstep(0.0,  0.06, d)) * 0.15;
+            float alpha = core * 0.52 + halo1;
+            if (alpha < 0.01) discard;
+
+            // Thick lines every 10 cells
+            vec2  g10   = abs(fract(c / 10.0 - 0.5) - 0.5);
+            float thick = 1.0 - smoothstep(0.02, 0.05, min(g10.x, g10.y));
+            vec3  col   = mix(uFade, uColor, max(thick, core));
+
+            // Fog: fade to transparent with distance from centre
+            float dist = length(vWorld) / 350.0;
+            float fog  = 1.0 - smoothstep(0.0, 0.65, dist);
+
+            gl_FragColor = vec4(col, alpha * fog);
+        }
+    `,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+});
+
+const gridMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(6000, 6000),
+    gridMat
+);
+gridMesh.rotation.x = -Math.PI / 2;
+gridMesh.position.y = -140;
+scene.add(gridMesh);
+
+// ─────────────────────────────────────────────────────────────
+// PROCEDURAL ROCKET
+// ─────────────────────────────────────────────────────────────
+function buildRocket() {
+    const group = new THREE.Group();
+    const mat   = new THREE.LineBasicMaterial({ color: C_ROCKET });
+    const wire  = geo => new THREE.LineSegments(new THREE.EdgesGeometry(geo, 15), mat.clone());
+    const RES   = 32;   // Ring smoothness
+
+    // Horizontal ring (LineLoop) at given height and radius
+    function addRing(r, y) {
+        const pts = [];
+        for (let i = 0; i <= RES; i++) {
+            const a = i / RES * Math.PI * 2;
+            pts.push(r * Math.cos(a), y, r * Math.sin(a));
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        group.add(new THREE.LineLoop(geo, mat.clone()));
+    }
+
+    // Rocket visual center offset
+    const OY = -40;
+
+    // ── Body ─────────────────────────────────────────────────
+    const N_LAT = 8;
+    const bodyGeo = new THREE.CylinderGeometry(15, 15, 200, 16, N_LAT, false);
+    bodyGeo.translate(0, OY, 0);
+    group.add(wire(bodyGeo));
+    for (let i = 0; i <= N_LAT; i++) addRing(15, -100 + OY + i * (200 / N_LAT));
+
+    // ── Nose Cone ────────────────────────────────────────────
+    const N_NOSE = 5;
+    const noseGeo = new THREE.ConeGeometry(15, 80, 16, N_NOSE, false);
+    noseGeo.translate(0, 140 + OY, 0);
+    group.add(wire(noseGeo));
+    for (let i = 0; i < N_NOSE; i++) {
+        const t = i / N_NOSE;
+        addRing(15 * (1 - t), 100 + OY + t * 80);
+    }
+
+    // ── Fins ─────────────────────────────────────────────────
+    const r = 15, span = 22, yBot = -100 + OY, yTop = -55 + OY;
+    [0, 90, 180, 270].forEach(deg => {
+        const a  = deg * Math.PI / 180;
+        const cx = Math.cos(a), cz = Math.sin(a);
+        const v  = new Float32Array([
+            r * cx,        yBot, r * cz,
+            (r+span) * cx, yBot, (r+span) * cz,
+            r * cx,        yTop, r * cz,
+        ]);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+        geo.setIndex([0, 1,  1, 2,  2, 0]);
+        group.add(new THREE.LineSegments(geo, mat.clone()));
+    });
+
+    return group;
+}
+
+const rocket = buildRocket();
+rocket.scale.setScalar(1.1);
+scene.add(rocket);
+
+// ─────────────────────────────────────────────────────────────
+// AXES (Custom thick arrows to bypass WebGL 1px line limit)
+// ─────────────────────────────────────────────────────────────
+const AL = 40, TIP_L = 6, RADIUS = 0.8; // RADIUS acts as line thickness
+
+function createThickAxis(dir, color) {
+    const group = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: color });
+
+    // Create cylinder for the shaft
+    const shaftLen = AL - TIP_L;
+    const shaftGeo = new THREE.CylinderGeometry(RADIUS, RADIUS, shaftLen, 8);
+    shaftGeo.translate(0, shaftLen / 2, 0);
+    group.add(new THREE.Mesh(shaftGeo, mat));
+
+    // Create cone for the tip
+    const tipGeo = new THREE.ConeGeometry(RADIUS * 3, TIP_L, 8);
+    tipGeo.translate(0, shaftLen + TIP_L / 2, 0);
+    group.add(new THREE.Mesh(tipGeo, mat));
+
+    // Align with direction vector (default points UP in Y)
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    
+    return group;
+}
+
+scene.add(createThickAxis(new THREE.Vector3(1, 0, 0), C_AXES_3D.x));
+scene.add(createThickAxis(new THREE.Vector3(0, 1, 0), C_AXES_3D.y));
+scene.add(createThickAxis(new THREE.Vector3(0, 0, 1), C_AXES_3D.z));
+
+// ─────────────────────────────────────────────────────────────
+// RESIZE HANDLER
+// ─────────────────────────────────────────────────────────────
+function resize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    renderer.setSize(w, h, false);
+    const aspect = w / h;
+    camera.left   = -VIEW_SIZE * aspect;
+    camera.right  =  VIEW_SIZE * aspect;
+    camera.top    =  VIEW_SIZE;
+    camera.bottom = -VIEW_SIZE;
+    camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─────────────────────────────────────────────────────────────
+// DATA SOURCE — WebSocket with synthetic fallback
+// ─────────────────────────────────────────────────────────────
+const D2R = Math.PI / 180;
+
+let liveAngles = null;   // null = use synthetic
+
+function getAngles(t) {
+    if (liveAngles) return liveAngles;
+    return {
+        roll  : 45 * Math.sin(0.8 * t),
+        pitch : 30 * Math.sin(0.5 * t + Math.PI / 4),
+        yaw   : 60 * Math.sin(0.3 * t),
+    };
+}
+
+(function connectWS() {
+    const WS_URL = `ws://${location.hostname}:8765`;
+    let ws;
+
+    function connect() {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            console.log('[ws] Connected to', WS_URL);
+        };
+
+        ws.onmessage = e => {
+            liveAngles = JSON.parse(e.data);
+        };
+
+        ws.onclose = () => {
+            console.log('[ws] Disconnected — falling back to synthetic, retrying in 2s');
+            liveAngles = null;
+            setTimeout(connect, 2000);
+        };
+
+        ws.onerror = () => ws.close();
+    }
+
+    connect();
+}());
+
+// ─────────────────────────────────────────────────────────────
+// CHART.JS SETUP
+// ─────────────────────────────────────────────────────────────
+
+// Plugin: Neon glow for chart lines
+Chart.register({
+    id: 'lineGlow',
+    beforeDatasetDraw(chart, args) {
+        const color = chart.data.datasets[args.index].borderColor;
+        chart.ctx.shadowColor = color;
+        chart.ctx.shadowBlur  = 18;
+    },
+    afterDatasetDraw(chart) {
+        chart.ctx.shadowBlur = 0;
+    },
+});
+
+function makeChart(id, color) {
+    return new Chart(document.getElementById(id).getContext('2d'), {
+        type: 'line',
+        data: { datasets: [{ data: [], borderColor: color, borderWidth: 2,
+                             pointRadius: 0, tension: 0.3, parsing: false }] },
+        options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    type: 'linear', min: 0, max: WINDOW_T,
+                    ticks: { color, font: { size: 13, family: 'monospace' }, maxTicksLimit: 7,
+                             callback: v => v + 's' },
+                    grid: { color: C_GRID_PLT },
+                },
+                y: {
+                    min: -180, max: 180,
+                    ticks: { color, font: { size: 13, family: 'monospace' }, stepSize: 45,
+                             callback: v => v + '°' },
+                    grid: { color: C_GRID_PLT },
+                },
+            },
+        },
+    });
+}
+
+const charts = {
+    roll  : makeChart('chart-roll',  C_LINE1),
+    pitch : makeChart('chart-pitch', C_LINE2),
+    yaw   : makeChart('chart-yaw',   C_LINE3),
+};
+
+// ─────────────────────────────────────────────────────────────
+// ANIMATION LOOP
+// ─────────────────────────────────────────────────────────────
+const t0 = performance.now() / 1000;
+let tPrev = 0, lastChart = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const t    = performance.now() / 1000 - t0;
+    const tWin = t % WINDOW_T;
+
+    // Rotate rocket
+    const { roll, pitch, yaw } = getAngles(t);
+    rocket.rotation.set(roll * D2R, pitch * D2R, yaw * D2R, 'XYZ');
+
+    // Shader grid: offset grows continuously — no modulo, no jump
+    gridMat.uniforms.uOffset.value = t * 30;
+
+    // Reset data when crossing the window limit
+    if (tWin < tPrev) {
+        Object.values(charts).forEach(c => { c.data.datasets[0].data = []; });
+    }
+    tPrev = tWin;
+
+    // Update charts at ~20 fps to keep performance smooth
+    if (t - lastChart > 0.05) {
+        charts.roll.data.datasets[0].data.push({ x: tWin, y: roll });
+        charts.pitch.data.datasets[0].data.push({ x: tWin, y: pitch });
+        charts.yaw.data.datasets[0].data.push({ x: tWin, y: yaw });
+        Object.values(charts).forEach(c => c.update('none'));
+        lastChart = t;
+    }
+
+    renderer.render(scene, camera);
+}
+
+animate();
+</script>
+
+</body>
+</html>
