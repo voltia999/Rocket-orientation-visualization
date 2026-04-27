@@ -494,7 +494,8 @@ function animate() {
 
     // Rotate rocket
     const { roll, pitch, yaw } = getAngles(t);
-    rocket.rotation.set(roll * D2R, pitch * D2R, yaw * D2R, 'XYZ');
+    // Rocket points along +Y: roll→Y, pitch→X, yaw→Z
+    rocket.rotation.set(pitch * D2R, roll * D2R, yaw * D2R, 'XYZ');
 
     // Shader grid: offset grows continuously — no modulo, no jump
     gridMat.uniforms.uOffset.value = t * 30;
