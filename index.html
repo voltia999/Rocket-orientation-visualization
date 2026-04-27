@@ -136,15 +136,15 @@
 <main id="main-content">
     <div id="charts-container">
         <div class="chart-panel">
-            <div class="chart-title" style="color:#44ff44; text-shadow: 0 0 8px #44ff4488;">Roll &nbsp; φ (°)</div>
+            <div class="chart-title" style="color:#4488ff; text-shadow: 0 0 8px #4488ff88;">Roll &nbsp; φ (°)</div>
             <div class="chart-canvas-wrapper"><canvas id="chart-roll"></canvas></div>
         </div>
         <div class="chart-panel">
-            <div class="chart-title" style="color:#4488ff; text-shadow: 0 0 8px #4488ff88;">Pitch &nbsp; θ (°)</div>
+            <div class="chart-title" style="color:#ff4444; text-shadow: 0 0 8px #ff444488;">Pitch &nbsp; θ (°)</div>
             <div class="chart-canvas-wrapper"><canvas id="chart-pitch"></canvas></div>
         </div>
         <div class="chart-panel">
-            <div class="chart-title" style="color: #ff4444; text-shadow: 0 0 8px #ff444488;">Yaw &nbsp; ψ (°)</div>
+            <div class="chart-title" style="color:#44ff44; text-shadow: 0 0 8px #44ff4488;">Yaw &nbsp; ψ (°)</div>
             <div class="chart-canvas-wrapper"><canvas id="chart-yaw"></canvas></div>
         </div>
     </div>
@@ -174,9 +174,9 @@ import * as THREE from 'three';
 const C_BG        = 0x0c0b1e;   // 3D background
 const C_ROCKET    = 0xFF2200;   // Wireframe rocket
 const C_AXES_3D   = { x: 0xff4444, y: 0x44ff44, z: 0x4488ff };
-const C_LINE1     = '#44ff44';  // Roll line color (Matches title: Green)
-const C_LINE2     = '#4488ff';  // Pitch line color (Matches title: Blue)
-const C_LINE3     = '#ff4444';  // Yaw line color (Matches title: Red)
+const C_LINE1     = '#4488ff';  // Roll  — Blue
+const C_LINE2     = '#ff4444';  // Pitch — Red
+const C_LINE3     = '#44ff44';  // Yaw   — Green
 const C_GRID_PLT  = '#3a2535';  // Chart grid color
 
 // ─────────────────────────────────────────────────────────────
@@ -366,9 +366,9 @@ function createThickAxis(dir, color) {
     return group;
 }
 
-scene.add(createThickAxis(new THREE.Vector3(1, 0, 0), C_AXES_3D.x));
-scene.add(createThickAxis(new THREE.Vector3(0, 1, 0), C_AXES_3D.y));
-scene.add(createThickAxis(new THREE.Vector3(0, 0, 1), C_AXES_3D.z));
+scene.add(createThickAxis(new THREE.Vector3(1, 0, 0), C_AXES_3D.y));
+scene.add(createThickAxis(new THREE.Vector3(0, 1, 0), C_AXES_3D.z));
+scene.add(createThickAxis(new THREE.Vector3(0, 0, 1), C_AXES_3D.x));
 
 // ─────────────────────────────────────────────────────────────
 // RESIZE HANDLER
