@@ -167,12 +167,12 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // ─────────────────────────────────────────────────────────────
 // COLORS 
 // ─────────────────────────────────────────────────────────────
 const C_BG        = 0x0c0b1e;   // 3D background
-const C_ROCKET    = 0xFF2200;   // Wireframe rocket
 const C_AXES_3D   = { x: 0xff4444, y: 0x44ff44, z: 0x4488ff };
 const C_LINE1     = '#4488ff';  // Roll  — Blue
 const C_LINE2     = '#ff4444';  // Pitch — Red
@@ -277,68 +277,22 @@ gridMesh.position.y = -140;
 scene.add(gridMesh);
 
 // ─────────────────────────────────────────────────────────────
-// PROCEDURAL ROCKET
+// GLB ROCKET
 // ─────────────────────────────────────────────────────────────
-function buildRocket() {
-    const group = new THREE.Group();
-    const mat   = new THREE.LineBasicMaterial({ color: C_ROCKET });
-    const wire  = geo => new THREE.LineSegments(new THREE.EdgesGeometry(geo, 15), mat.clone());
-    const RES   = 32;   // Ring smoothness
-
-    // Horizontal ring (LineLoop) at given height and radius
-    function addRing(r, y) {
-        const pts = [];
-        for (let i = 0; i <= RES; i++) {
-            const a = i / RES * Math.PI * 2;
-            pts.push(r * Math.cos(a), y, r * Math.sin(a));
-        }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-        group.add(new THREE.LineLoop(geo, mat.clone()));
-    }
-
-    // Rocket visual center offset
-    const OY = -40;
-
-    // ── Body ─────────────────────────────────────────────────
-    const N_LAT = 8;
-    const bodyGeo = new THREE.CylinderGeometry(15, 15, 200, 16, N_LAT, false);
-    bodyGeo.translate(0, OY, 0);
-    group.add(wire(bodyGeo));
-    for (let i = 0; i <= N_LAT; i++) addRing(15, -100 + OY + i * (200 / N_LAT));
-
-    // ── Nose Cone ────────────────────────────────────────────
-    const N_NOSE = 5;
-    const noseGeo = new THREE.ConeGeometry(15, 80, 16, N_NOSE, false);
-    noseGeo.translate(0, 140 + OY, 0);
-    group.add(wire(noseGeo));
-    for (let i = 0; i < N_NOSE; i++) {
-        const t = i / N_NOSE;
-        addRing(15 * (1 - t), 100 + OY + t * 80);
-    }
-
-    // ── Fins ─────────────────────────────────────────────────
-    const r = 15, span = 22, yBot = -100 + OY, yTop = -55 + OY;
-    [0, 90, 180, 270].forEach(deg => {
-        const a  = deg * Math.PI / 180;
-        const cx = Math.cos(a), cz = Math.sin(a);
-        const v  = new Float32Array([
-            r * cx,        yBot, r * cz,
-            (r+span) * cx, yBot, (r+span) * cz,
-            r * cx,        yTop, r * cz,
-        ]);
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
-        geo.setIndex([0, 1,  1, 2,  2, 0]);
-        group.add(new THREE.LineSegments(geo, mat.clone()));
-    });
-
-    return group;
-}
-
-const rocket = buildRocket();
-rocket.scale.setScalar(1.1);
+const rocket = new THREE.Group();
 scene.add(rocket);
+
+new GLTFLoader().load('Cohete_Solaris_Display.glb', gltf => {
+    const model = gltf.scene;
+    // Centre and scale to match the previous procedural rocket
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    const scale = 300 / Math.max(size.x, size.y, size.z);
+    model.scale.setScalar(scale);
+    model.position.copy(centre).multiplyScalar(-scale);
+    rocket.add(model);
+});
 
 // ─────────────────────────────────────────────────────────────
 // AXES (Custom thick arrows to bypass WebGL 1px line limit)
